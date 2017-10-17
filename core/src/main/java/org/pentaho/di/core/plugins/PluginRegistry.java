@@ -29,7 +29,6 @@ import java.lang.reflect.Method;
 import java.net.MalformedURLException;
 import java.net.URISyntaxException;
 import java.net.URL;
-import java.net.URLClassLoader;
 import java.net.URLDecoder;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -76,11 +75,11 @@ public class PluginRegistry {
 
   private final Map<Class<? extends PluginTypeInterface>, List<PluginInterface>> pluginMap;
 
-  private final Map<String, URLClassLoader> folderBasedClassLoaderMap = new HashMap<String, URLClassLoader>();
+  private final Map<String, ClassLoader> folderBasedClassLoaderMap = new HashMap<String, ClassLoader>();
 
-  private final Map<Class<? extends PluginTypeInterface>, Map<PluginInterface, URLClassLoader>> classLoaderMap;
+  private final Map<Class<? extends PluginTypeInterface>, Map<PluginInterface, ClassLoader>> classLoaderMap;
 
-  private final Map<String, URLClassLoader> classLoaderGroupsMap;
+  private final Map<String, ClassLoader> classLoaderGroupsMap;
 
   private final Map<Class<? extends PluginTypeInterface>, List<String>> categoryMap;
   private final Map<PluginInterface, String[]> parentClassloaderPatternMap = new HashMap<PluginInterface, String[]>();
@@ -95,9 +94,9 @@ public class PluginRegistry {
    */
   private PluginRegistry() {
     pluginMap = new HashMap<Class<? extends PluginTypeInterface>, List<PluginInterface>>();
-    classLoaderMap = new HashMap<Class<? extends PluginTypeInterface>, Map<PluginInterface, URLClassLoader>>();
+    classLoaderMap = new HashMap<Class<? extends PluginTypeInterface>, Map<PluginInterface, ClassLoader>>();
     categoryMap = new HashMap<Class<? extends PluginTypeInterface>, List<String>>();
-    classLoaderGroupsMap = new HashMap<String, URLClassLoader>();
+    classLoaderGroupsMap = new HashMap<String, ClassLoader>();
     lock = new ReentrantReadWriteLock();
   }
 
@@ -133,7 +132,7 @@ public class PluginRegistry {
         list.remove( plugin );
       }
 
-      Map<PluginInterface, URLClassLoader> classLoaders = classLoaderMap.get( plugin.getPluginType() );
+      Map<PluginInterface, ClassLoader> classLoaders = classLoaderMap.get( plugin.getPluginType() );
       if ( classLoaders != null ) {
         classLoaders.remove( plugin );
       }
@@ -299,7 +298,7 @@ public class PluginRegistry {
   /**
    * Get a plugin from the registry
    *
-   * @param stepplugintype The type of plugin to look for
+   * @param pluginType The type of plugin to look for
    * @param id             The ID to scan for
    * @return the plugin or null if nothing was found.
    */
@@ -388,7 +387,7 @@ public class PluginRegistry {
    * Load the class of the type specified for the plugin with the ID specified.
    *
    * @param pluginType the type of plugin
-   * @param plugiId    The plugin id to use
+   * @param pluginId    The plugin id to use
    * @param classType  The type of class to load
    * @return the instantiated class.
    * @throws KettlePluginException
@@ -487,7 +486,7 @@ public class PluginRegistry {
         if ( plugin.isNativePlugin() ) {
           cl = (Class<? extends T>) Class.forName( className );
         } else {
-          URLClassLoader ucl = null;
+          ClassLoader ucl = null;
 
           // If the plugin needs to have a separate class loader for each instance of the plugin.
           // This is not the default. By default we cache the class loader for each plugin ID.
@@ -499,9 +498,9 @@ public class PluginRegistry {
               ucl = createClassLoader( plugin );
             } else {
               // See if we can find a class loader to re-use.
-              Map<PluginInterface, URLClassLoader> classLoaders = classLoaderMap.get( plugin.getPluginType() );
+              Map<PluginInterface, ClassLoader> classLoaders = classLoaderMap.get( plugin.getPluginType() );
               if ( classLoaders == null ) {
-                classLoaders = new HashMap<PluginInterface, URLClassLoader>();
+                classLoaders = new HashMap<PluginInterface, ClassLoader>();
                 classLoaderMap.put( plugin.getPluginType(), classLoaders );
               } else {
                 ucl = classLoaders.get( plugin );
@@ -796,7 +795,7 @@ public class PluginRegistry {
    * Find the plugin ID based on the name of the plugin
    *
    * @param pluginType the type of plugin
-   * @param pluginName The name to look for
+   * @param pluginId The id to look for
    * @return The plugin with the specified name or null if nothing was found.
    */
   public PluginInterface findPluginWithId( Class<? extends PluginTypeInterface> pluginType, String pluginId ) {
@@ -849,7 +848,7 @@ public class PluginRegistry {
   }
 
   /**
-   * @param the type of plugin to get information for
+   * @param pluginType - The type of plugin to get information for
    * @return a row buffer containing plugin information for the given plugin type
    * @throws KettlePluginException
    */
@@ -892,13 +891,13 @@ public class PluginRegistry {
         return (T) Class.forName( className );
       } else {
 
-        URLClassLoader ucl = null;
+        ClassLoader ucl = null;
 
         lock.writeLock().lock();
         try {
-          Map<PluginInterface, URLClassLoader> classLoaders = classLoaderMap.get( plugin.getPluginType() );
+          Map<PluginInterface, ClassLoader> classLoaders = classLoaderMap.get( plugin.getPluginType() );
           if ( classLoaders == null ) {
-            classLoaders = new HashMap<PluginInterface, URLClassLoader>();
+            classLoaders = new HashMap<PluginInterface, ClassLoader>();
             classLoaderMap.put( plugin.getPluginType(), classLoaders );
           } else {
             ucl = classLoaders.get( plugin );
@@ -963,7 +962,7 @@ public class PluginRegistry {
       if ( plugin.isNativePlugin() ) {
         return this.getClass().getClassLoader();
       } else {
-        URLClassLoader ucl = null;
+        ClassLoader ucl = null;
 
         lock.writeLock().lock();
         try {
@@ -977,9 +976,9 @@ public class PluginRegistry {
             ucl = createClassLoader( plugin );
           } else {
             // See if we can find a class loader to re-use.
-            Map<PluginInterface, URLClassLoader> classLoaders = classLoaderMap.get( plugin.getPluginType() );
+            Map<PluginInterface, ClassLoader> classLoaders = classLoaderMap.get( plugin.getPluginType() );
             if ( classLoaders == null ) {
-              classLoaders = new HashMap<PluginInterface, URLClassLoader>();
+              classLoaders = new HashMap<PluginInterface, ClassLoader>();
               classLoaderMap.put( plugin.getPluginType(), classLoaders );
             } else {
               ucl = classLoaders.get( plugin );
@@ -1005,10 +1004,13 @@ public class PluginRegistry {
                   if ( ucl == null ) {
                     if ( plugin.getLibraries().size() == 0 ) {
                       if ( plugin instanceof ClassLoadingPluginInterface ) {
-                        return ( (ClassLoadingPluginInterface) plugin ).getClassLoader();
+                        ucl = ( (ClassLoadingPluginInterface) plugin ).getClassLoader();
                       }
                     }
-                    ucl = createClassLoader( plugin );
+
+                    if ( ucl == null ) {
+                      ucl = createClassLoader( plugin );
+                    }
                     classLoaders.put( plugin, ucl ); // save for later use...
                   }
                 }
@@ -1055,12 +1057,12 @@ public class PluginRegistry {
     }
   }
 
-  public void addClassLoader( URLClassLoader ucl, PluginInterface plugin ) {
+  public void addClassLoader( ClassLoader ucl, PluginInterface plugin ) {
     lock.writeLock().lock();
     try {
-      Map<PluginInterface, URLClassLoader> classLoaders = classLoaderMap.get( plugin.getPluginType() );
+      Map<PluginInterface, ClassLoader> classLoaders = classLoaderMap.get( plugin.getPluginType() );
       if ( classLoaders == null ) {
-        classLoaders = new HashMap<PluginInterface, URLClassLoader>();
+        classLoaders = new HashMap<PluginInterface, ClassLoader>();
         classLoaderMap.put( plugin.getPluginType(), classLoaders );
       }
       classLoaders.put( plugin, ucl );
